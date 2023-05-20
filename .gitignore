@@ -21,3 +21,4 @@ lib64
 /build/
 __pycache__/
 .DS_Store
+**/sim_data_for_3d/**

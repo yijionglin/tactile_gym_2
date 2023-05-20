@@ -5,7 +5,7 @@ import cv2
 from tactile_gym.assets import add_assets_path
 from tactile_gym.utils.pybullet_draw_utils import *
 from tactile_gym.utils.general_utils import check_dir
-
+from ipdb import set_trace
 
 class TactileSensor:
     def __init__(
@@ -49,6 +49,7 @@ class TactileSensor:
         Turn off collisions between t_s base and rest of the envs,
         useful for speed of training due to mininmising collisions
         """
+        # set_trace()
         self._pb.setCollisionFilterGroupMask(self.robot_id, self.tactile_link_ids["body"], 0, 0)
         if self.t_s_name == 'tactip':
             if self.t_s_type in ["right_angle", "mini_right_angle", "forward"]:

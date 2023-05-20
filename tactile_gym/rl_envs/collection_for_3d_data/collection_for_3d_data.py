@@ -7,6 +7,8 @@ from tactile_gym.rl_envs.base_tactile_env import BaseTactileEnv
 from tactile_gym.rl_envs.collection_for_3d_data.rest_poses import rest_poses_dict
 from ipdb import set_trace
 import cv2
+from tactile_gym.mesh_utils import utils_sample, utils_mesh, utils_raycasting
+import trimesh
 
 env_modes_default = {
     'movement_mode': 'xy',
@@ -25,8 +27,27 @@ class CollectionFor3DData(BaseTactileEnv):
         image_size=[64, 64],
         env_modes=env_modes_default,
         show_gui=False,
-        show_tactile=False
+        show_tactile=False,
+        total_collected_number = 2,
+        user_mode = 'auto',
     ):
+
+        # variables for 3d data collection
+
+        
+        self.collected_3d_data_poses_workframe = []
+        self.collected_3d_data_poses_worldframe = []
+        self.collected_number = 0
+        self.total_collected_number = total_collected_number
+        self.data_path = r'C:\Users\yijio\dev\tactip\tac_gym_3d_re\tactile_gym\examples\sim_data_for_3d'
+        self.images_path = os.path.join(self.data_path, 'images')
+        self.obj_scale = 0.2
+        self.if_fault_collected_img = False
+        # Set number of points to consider the touch chart collection valid.
+        self.num_valid_points = 250
+        # self.user_mode == 'manual'
+        self.user_mode = user_mode
+        # self.poses_path = os.path.join(self.data_path, 'poses.npy')
 
         # used to setup control of robot
         self._sim_time_step = 1.0 / 240.0
@@ -46,7 +67,7 @@ class CollectionFor3DData(BaseTactileEnv):
         self.noise_mode = env_modes["noise_mode"]
         self.observation_mode = env_modes["observation_mode"]
         self.reward_mode = env_modes["reward_mode"]
-
+        
         # set which robot arm to use
         self.arm_type = env_modes["arm_type"]
         # self.arm_type = "ur5"
@@ -98,7 +119,8 @@ class CollectionFor3DData(BaseTactileEnv):
         self.load_obj()
 
         # work frame origin
-        self.workframe_pos = np.array([0.65, 0.0, 0.205])
+        # self.workframe_pos = np.array([0.65, 0.0, 0.205])
+        self.workframe_pos = np.array([0.65, 0.0, 0.35])
         self.workframe_rpy = np.array([-np.pi, 0.0, np.pi / 2])
 
         # initial joint positions used when reset
@@ -120,18 +142,11 @@ class CollectionFor3DData(BaseTactileEnv):
             t_s_dynamics={'stiffness': 50, 'damping': 100, 'friction': 10.0},
             show_gui=self._show_gui,
             show_tactile=self._show_tactile,
+            user_mode=user_mode,
         )
 
-        # variables for 3d data collection
-
         self.robot.stop_at_touch =True
-        self.collected_3d_data_poses_workframe = []
-        self.collected_3d_data_poses_worldframe = []
-        self.collected_number = 0
-        self.total_collected_number = 2
-        self.data_path = r'C:\Users\yijio\dev\tactip\tac_gym_3d_re\tactile_gym\examples\sim_data_for_3d'
-        self.images_path = os.path.join(self.data_path, 'images')
-        # self.poses_path = os.path.join(self.data_path, 'poses.npy')
+
         # this is needed to set some variables used for initial observation/obs_dim()
         self.reset()
 
@@ -202,20 +217,23 @@ class CollectionFor3DData(BaseTactileEnv):
 
     def setup_obj(self):
         # define an initial position for the objects (world coords)
-        # self.obj_pos = [0.65, 0.0, 0.0]
-        self.obj_pos = [0.65, 0.0, 0.08]
+        # self.obj_pos = [0.65, 0.0, 0.08]
+        self.obj_pos = [0.5, 0.0, 0.00]
         self.obj_rpy = [np.pi/2, 0, -np.pi/2]
         self.obj_orn = self._pb.getQuaternionFromEuler(self.obj_rpy)
 
     def load_obj(self):
         # load temp obj and goal indicators so they can be more conveniently updated
 
-        obj_path = 'c:\\users\\yijio\\dev\\tactip\\tac_gym_3d_re\\deepsdf\\data\\ShapeNetCoreV2urdf\\real_mesh\\bottle\\model.urdf'
-        self.obj_stim_id = self._pb.loadURDF(
-            add_assets_path(obj_path),
+        self.obj_path = 'c:\\users\\yijio\\dev\\tactip\\tac_gym_3d_re\\deepsdf\\data\\ShapeNetCoreV2urdf\\real_mesh\\bottle'
+        self.obj_urdf_path = os.path.join(self.obj_path,'model.urdf')
+        self.obj_id = self._pb.loadURDF(
+            add_assets_path(self.obj_urdf_path),
             self.obj_pos,
             self.obj_orn,
             useFixedBase=True,
+            flags=self._pb.URDF_INITIALIZE_SAT_FEATURES,
+            globalScaling=self.obj_scale
         )
         self.goal_indicator = self._pb.loadURDF(
             add_assets_path("shared_assets/environment_objects/goal_indicators/sphere_indicator.urdf"),
@@ -233,12 +251,49 @@ class CollectionFor3DData(BaseTactileEnv):
 
         self._env_step_counter += 1
         # set_trace()
-        self.robot.apply_action(
-            scaled_actions,
-            control_mode=self.control_mode,
-            velocity_action_repeat=self._velocity_action_repeat,
-            max_steps=self._max_blocking_pos_move_steps,
-        )
+        if self.user_mode == 'manual':
+            self.robot.apply_action(
+                scaled_actions,
+                control_mode=self.control_mode,
+                velocity_action_repeat=self._velocity_action_repeat,
+                max_steps=self._max_blocking_pos_move_steps,
+            )
+        else:
+            # Auto mode
+            # Sample random position on the hemisphere
+            
+            # =============This is setup for sphere, just do it once!=============
+            self.obj_obj_path = os.path.join(self.obj_path, "model.obj")
+            mesh_original = utils_mesh._as_mesh(trimesh.load(self.obj_obj_path))
+            # Process object vertices to match thee transformations on the urdf file
+            vertices_wrld = utils_mesh.rotate_pointcloud(mesh_original.vertices, self.obj_rpy) * self.obj_scale + self.obj_pos
+            mesh = trimesh.Trimesh(vertices=vertices_wrld, faces=mesh_original.faces)
+            ray_hemisphere = utils_sample.get_ray_hemisphere(mesh)
+            # ============= just do it once!=============
+
+
+            self.robot.results_at_touch_wrld = None
+            self.if_fault_collected_img = False
+            hemisphere_random_pos, angles = utils_sample.sample_sphere(ray_hemisphere)
+            # Move robot to random position on the hemisphere
+            robot_sphere_wrld = mesh.bounding_box.centroid + np.array(hemisphere_random_pos)
+            self.robot = utils_sample.robot_touch_spherical(self.robot, robot_sphere_wrld, self.obj_pos, angles)
+            # Check on camera and store tactile images
+            camera = self.robot.get_tactile_observation()
+            check_on_camera = utils_sample.check_on_camera(camera)
+            if not check_on_camera:
+                #pb.removeBody(robot.robot_id)
+                self.if_fault_collected_img = True
+            
+            # Filter points with information about contact, make sure there are at least {num_valid_points} valid ones
+            contact_pointcloud = utils_raycasting.filter_point_cloud(self.robot.results_at_touch_wrld, self.obj_id)
+            check_on_contact_pointcloud = utils_sample.check_on_contact_pointcloud(contact_pointcloud, self.num_valid_points)
+            if not check_on_contact_pointcloud:
+                print(f'Point cloud shape is too small: {contact_pointcloud.shape[0]} points')
+                #pb.removeBody(robot.robot_id)
+                self.if_fault_collected_img = True
+
+
         self._observation = self.get_observation()
         reward, done = self.get_step_data()
 
@@ -282,6 +337,7 @@ class CollectionFor3DData(BaseTactileEnv):
         Reorientate obj
         """
         # reset the ur5 arm at the origin of the workframe with variation to the embed distance
+                # Deactivate collision between robot and object. Raycasting to extract point cloud still works.
         pass
 
     def update_init_pose(self):
@@ -305,7 +361,8 @@ class CollectionFor3DData(BaseTactileEnv):
             self.full_reset()
         init_TCP_pos, init_TCP_rpy = self.update_init_pose()
         self.robot.reset(reset_TCP_pos=init_TCP_pos, reset_TCP_rpy=init_TCP_rpy)
-
+        for link_idx in range(self._pb.getNumJoints(self.robot.robot_id)+1):
+            self._pb.setCollisionFilterPair(self.robot.robot_id, self.obj_id, link_idx, -1, 0)
         self.reset_counter += 1
         self._env_step_counter = 0
 
@@ -374,22 +431,24 @@ class CollectionFor3DData(BaseTactileEnv):
 
         # get rl info
         done = self.termination()
-
-        if not self.robot.stop_at_touch:
-            self.robot.stop_at_touch = True
-            self.if_collect_data = input("Are you sure to collect the tactile image?")
-            # set_trace()
-            if self.if_collect_data:
-                self.collected_number += 1
-                tactile_image = self._observation['tactile']
-                img_name = "image_" + str(self.collected_number) + ".png"
-                cv2.imwrite(os.path.join(self.images_path, img_name), tactile_image)
-                label_pose = self._observation['extended_feature']
-                self.collected_3d_data_poses_workframe.append(label_pose[0])
-                self.collected_3d_data_poses_worldframe.append(label_pose[1])
-
-
         reward = self.reward()
+
+        # if self.user_mode =='manual':
+        if not self.if_fault_collected_img:
+            if not self.robot.stop_at_touch:
+                self.robot.stop_at_touch = True
+                self.if_collect_data = input("Are you sure to collect the tactile image?")
+                # set_trace()
+                if self.if_collect_data:
+                    self.collected_number += 1
+                    tactile_image = self._observation['tactile']
+                    img_name = "image_" + str(self.collected_number) + ".png"
+                    cv2.imwrite(os.path.join(self.images_path, img_name), tactile_image)
+                    label_pose = self._observation['extended_feature']
+                    self.collected_3d_data_poses_workframe.append(label_pose[0])
+                    self.collected_3d_data_poses_worldframe.append(label_pose[1])
+
+        
 
         return reward, done
 

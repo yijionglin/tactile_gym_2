@@ -1,5 +1,5 @@
 from tactile_gym.robots.arms.base_robot_arm import BaseRobotArm
-
+from ipdb import set_trace
 
 class UR5(BaseRobotArm):
     def __init__(self, pb, robot_id, rest_poses, workframe_pos, workframe_rpy, TCP_lims):

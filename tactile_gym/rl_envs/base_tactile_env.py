@@ -132,11 +132,11 @@ class BaseTactileEnv(gym.Env):
             add_assets_path("shared_assets/environment_objects/plane/plane.urdf"),
             [0, 0, -0.625],
         )
-        self.table_id = self._pb.loadURDF(
-            add_assets_path("shared_assets/environment_objects/table/table.urdf"),
-            [0.50, 0.00, -0.625],
-            [0.0, 0.0, 0.0, 1.0],
-        )
+        # self.table_id = self._pb.loadURDF(
+        #     add_assets_path("shared_assets/environment_objects/table/table.urdf"),
+        #     [0.50, 0.00, -0.625],
+        #     [0.0, 0.0, 0.0, 1.0],
+        # )
 
     def scale_actions(self, actions):
 

@@ -13,7 +13,10 @@ def main():
     show_tactile = False
     render = True
     print_info = False
+    user_mode = 'auto',
     image_size = [256, 256]
+
+    total_collected_number = 10
     env_modes = {
         ## which dofs can have movement
         # 'movement_mode':'yz',
@@ -53,6 +56,8 @@ def main():
         show_gui=show_gui,
         show_tactile=show_tactile,
         image_size=image_size,
+        total_collected_number = total_collected_number,
+        user_mode= user_mode,
     )
 
     # set seeding

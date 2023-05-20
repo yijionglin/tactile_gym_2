@@ -30,7 +30,8 @@ class Robot:
         t_s_core="no_core",
         t_s_dynamics={},
         show_gui=True,
-        show_tactile=True
+        show_tactile=True,
+        user_mode='auto',
     ):
 
         self._pb = pb
@@ -38,12 +39,12 @@ class Robot:
         self.t_s_name = t_s_name
         self.t_s_type = t_s_type
         self.t_s_core = t_s_core
-
+        self.user_mode = user_mode
         # Mauro parameters
         self.stop_at_touch = False
         self.get_ready_for_next_touch = False
         self.coords_at_touch_wrld = None
-        self.results_at_touch_wrld = None
+        
         self.nx = None
         self.ny = None
 
@@ -151,9 +152,26 @@ class Robot:
         # self.arm.print_joint_pos_vel()
         # set_trace()
 
+    def move_linear(self, targ_pos, targ_rpy):
+        self.arm.tcp_direct_workframe_move(targ_pos, targ_rpy)
+
+        # slow but more realistic moves
+        #self.blocking_move(max_steps=5000, constant_vel=0.00025)
+
+        # fast but unrealistic moves (bigger_moves = worse)
+        #self.blocking_move(max_steps=1000, constant_vel=None)
+
+        # medium speed
+        self.blocking_move(max_steps=5000, constant_vel=0.00075)
+
     def full_reset(self):
         self.load_robot()
         self.t_s.turn_off_t_s_collisions()
+
+    def turn_off_link_collisions(self):
+        for i in range(8):
+            self._pb.setCollisionFilterGroupMask(self.robot_id, i, 0, 0)
+
 
     def step_sim(self):
         """
@@ -279,31 +297,45 @@ class Robot:
                 break
                 
             # get ready
-            if not self.get_ready_for_next_touch:
-                if i%5==0:
-                    camera = self.t_s.t_s_camera()     # this is very slow, self.tactip.get_imgs() might be better
-                    camera_flat = camera.ravel()
-                    # if tactip touches something
-                    if np.mean(camera_flat) == 0:
-                        self.get_ready_for_next_touch = True
-                        # set_trace()
-                        break
-            print(self.get_ready_for_next_touch)
-            if self.stop_at_touch and self.get_ready_for_next_touch:
-                if i%5==0:
-                    camera = self.t_s.t_s_camera()     # this is very slow, self.tactip.get_imgs() might be better
-                    camera_flat = camera.ravel()
+            if self.user_mode == "manual":
+                if not self.get_ready_for_next_touch:
+                    if i%5==0:
+                        camera = self.t_s.t_s_camera()     # this is very slow, self.tactip.get_imgs() might be better
+                        camera_flat = camera.ravel()
+                        # if tactip touches something
+                        if np.mean(camera_flat) == 0:
+                            self.get_ready_for_next_touch = True
+                            # set_trace()
+                            break
+                print(self.get_ready_for_next_touch)
+                if self.stop_at_touch and self.get_ready_for_next_touch:
+                    if i%5==0:
+                        camera = self.t_s.t_s_camera()     # this is very slow, self.tactip.get_imgs() might be better
+                        camera_flat = camera.ravel()
 
-                    # if tactip touches something
-                    if np.mean(camera_flat) > 1:
-                        self.coords_at_touch_wrld = self.arm.get_current_TCP_pos_vel_worldframe()[0]
-                        self.get_tactile_observation()
-                        self.stop_at_touch = False
-                        self.get_ready_for_next_touch = False
-                        #self.results_at_touch_wrld = raycasting_utils.get_contact_points(self.arm.get_current_TCP_pos_vel_worldframe(), self._pb, self.nx, self.ny)
-                        # set_trace()
-                        break
-
+                        # if tactip touches something
+                        if np.mean(camera_flat) > 1:
+                            self.coords_at_touch_wrld = self.arm.get_current_TCP_pos_vel_worldframe()[0]
+                            self.get_tactile_observation()
+                            self.stop_at_touch = False
+                            self.get_ready_for_next_touch = False
+                            #self.results_at_touch_wrld = raycasting_utils.get_contact_points(self.arm.get_current_TCP_pos_vel_worldframe(), self._pb, self.nx, self.ny)
+                            # set_trace()
+                            break
+            else:
+                if self.stop_at_touch:
+                    if i%5==0:
+                        camera = self.t_s.t_s_camera()     # this is very slow, self.tactip.get_imgs() might be better
+                        camera_flat = camera.ravel()
+                        # if tactip touches something
+                        if np.mean(camera_flat) > 1:
+                            self.coords_at_touch_wrld = self.arm.get_current_TCP_pos_vel_worldframe()[0]
+                            self.get_tactile_observation()
+                            self.stop_at_touch = False
+                            self.get_ready_for_next_touch = False
+                            #self.results_at_touch_wrld = raycasting_utils.get_contact_points(self.arm.get_current_TCP_pos_vel_worldframe(), self._pb, self.nx, self.ny)
+                            # set_trace()
+                            break
 
     def get_tactile_observation(self):
         return self.t_s.get_observation()
