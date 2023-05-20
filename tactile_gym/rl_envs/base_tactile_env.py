@@ -7,7 +7,7 @@ import pkgutil
 import cv2
 
 from tactile_gym.assets import add_assets_path
-
+from ipdb import set_trace
 
 class BaseTactileEnv(gym.Env):
     def __init__(self, max_steps=250, image_size=[64, 64], show_gui=False, show_tactile=False, arm_type='ur5'):
@@ -170,7 +170,7 @@ class BaseTactileEnv(gym.Env):
         scaled_actions = self.scale_actions(encoded_actions)
 
         self._env_step_counter += 1
-
+        # set_trace()
         self.robot.apply_action(
             scaled_actions,
             control_mode=self.control_mode,

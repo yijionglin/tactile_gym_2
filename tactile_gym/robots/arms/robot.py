@@ -8,7 +8,7 @@ from tactile_gym.robots.arms.ur5.ur5 import UR5
 from tactile_gym.robots.arms.franka_panda.franka_panda import FrankaPanda
 from tactile_gym.robots.arms.kuka_iiwa.kuka_iiwa import KukaIiwa
 from tactile_gym.sensors.tactile_sensor import TactileSensor
-
+from ipdb import set_trace
 # clean up printing
 float_formatter = "{:.6f}".format
 np.set_printoptions(formatter={"float_kind": float_formatter})
@@ -41,6 +41,7 @@ class Robot:
 
         # Mauro parameters
         self.stop_at_touch = False
+        self.get_ready_for_next_touch = False
         self.coords_at_touch_wrld = None
         self.results_at_touch_wrld = None
         self.nx = None
@@ -222,7 +223,7 @@ class Robot:
         targ_rpy = self.arm.target_rpy_worldframe
         targ_orn = self.arm.target_orn_worldframe
         targ_j_pos = self.arm.target_joints
-
+        # set_trace()
         for i in range(max_steps):
 
             # get the current position and veloicities (worldframe)
@@ -277,8 +278,18 @@ class Robot:
             if (pos_error < 2e-4) and (orn_error < 1e-3) and (total_j_vel < 0.1):
                 break
                 
-            # get camera output without displaying sensor
-            if self.stop_at_touch:
+            # get ready
+            if not self.get_ready_for_next_touch:
+                if i%5==0:
+                    camera = self.t_s.t_s_camera()     # this is very slow, self.tactip.get_imgs() might be better
+                    camera_flat = camera.ravel()
+                    # if tactip touches something
+                    if np.mean(camera_flat) == 0:
+                        self.get_ready_for_next_touch = True
+                        # set_trace()
+                        break
+            print(self.get_ready_for_next_touch)
+            if self.stop_at_touch and self.get_ready_for_next_touch:
                 if i%5==0:
                     camera = self.t_s.t_s_camera()     # this is very slow, self.tactip.get_imgs() might be better
                     camera_flat = camera.ravel()
@@ -288,8 +299,11 @@ class Robot:
                         self.coords_at_touch_wrld = self.arm.get_current_TCP_pos_vel_worldframe()[0]
                         self.get_tactile_observation()
                         self.stop_at_touch = False
+                        self.get_ready_for_next_touch = False
                         #self.results_at_touch_wrld = raycasting_utils.get_contact_points(self.arm.get_current_TCP_pos_vel_worldframe(), self._pb, self.nx, self.ny)
+                        # set_trace()
                         break
+
 
     def get_tactile_observation(self):
         return self.t_s.get_observation()
