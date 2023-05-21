@@ -429,26 +429,26 @@ class CollectionFor3DData(BaseTactileEnv):
             _,
         ) = self.robot.arm.get_current_TCP_pos_vel_worldframe()
 
-        # get rl info
-        done = self.termination()
-        reward = self.reward()
+
 
         # if self.user_mode =='manual':
         if not self.if_fault_collected_img:
             if not self.robot.stop_at_touch:
                 self.robot.stop_at_touch = True
-                self.if_collect_data = input("Are you sure to collect the tactile image?")
+                # self.if_collect_data = input("Are you sure to collect the tactile image?")
                 # set_trace()
-                if self.if_collect_data:
-                    self.collected_number += 1
-                    tactile_image = self._observation['tactile']
-                    img_name = "image_" + str(self.collected_number) + ".png"
-                    cv2.imwrite(os.path.join(self.images_path, img_name), tactile_image)
-                    label_pose = self._observation['extended_feature']
-                    self.collected_3d_data_poses_workframe.append(label_pose[0])
-                    self.collected_3d_data_poses_worldframe.append(label_pose[1])
+                # if self.if_collect_data:
+                self.collected_number += 1
+                tactile_image = self._observation['tactile']
+                img_name = "image_" + str(self.collected_number) + ".png"
+                cv2.imwrite(os.path.join(self.images_path, img_name), tactile_image)
+                label_pose = self._observation['extended_feature']
+                self.collected_3d_data_poses_workframe.append(label_pose[0])
+                self.collected_3d_data_poses_worldframe.append(label_pose[1])
 
-        
+        # get rl info
+        done = self.termination()
+        reward = self.reward()
 
         return reward, done
 
